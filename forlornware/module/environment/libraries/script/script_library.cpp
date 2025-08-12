@@ -30,6 +30,8 @@ int getscriptbytecode(lua_State* L) {
 	return 1;
 }
 
+int getgc(lua_State* L) { lua_newtable(L); int idx = 1; global_State* g = G(L); for (GCObject* o = g->rootgc; o != NULL; o = o->next) { if (o->tt == LUA_TTABLE || o->tt == LUA_TFUNCTION) { lua_pushinteger(L, idx++); if (o->tt == LUA_TTABLE) { sethvalue(L, L->top, gco2h(o)); } else { setclvalue(L, L->top, gco2cl(o)); } api_incr_top(L); lua_settable(L, -3); } } return 1; }
+
 void script_library::initialize(lua_State* L)
 {
 	register_env_functions(L,
@@ -37,6 +39,7 @@ void script_library::initialize(lua_State* L)
 			{"identifyexecutor", identifyexecutor},
 			{"getgenv", getgenv},
 			{"getscriptbytecode", getscriptbytecode},
+			{"getgc", getgc},
 			{nullptr, nullptr}
 		});
 }

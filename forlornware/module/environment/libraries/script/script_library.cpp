@@ -30,7 +30,38 @@ int getscriptbytecode(lua_State* L) {
 	return 1;
 }
 
-int getgc(lua_State* L) { lua_newtable(L); int idx = 1; global_State* g = G(L); for (GCObject* o = g->rootgc; o != NULL; o = o->next) { if (o->tt == LUA_TTABLE || o->tt == LUA_TFUNCTION) { lua_pushinteger(L, idx++); if (o->tt == LUA_TTABLE) { sethvalue(L, L->top, gco2h(o)); } else { setclvalue(L, L->top, gco2cl(o)); } api_incr_top(L); lua_settable(L, -3); } } return 1; }
+int getgc(lua_State* L) {
+    bool IncludeTables = lua_gettop(L) ? luaL_optboolean(L, 1, 0) : false;
+
+    lua_newtable(L);
+
+    struct CGarbageCollector
+    {
+        lua_State* L;
+        int IncludeTables;
+        int Count;
+    } Gct{ L, IncludeTables, 0 };
+
+    luaM_visitgco(L, &Gct, [](void* Context, lua_Page* Page, GCObject* Gco) {
+        auto Gct = static_cast<CGarbageCollector*>(Context);
+
+        if (!((Gco->gch.marked ^ WHITEBITS) & otherwhite(Gct->L->global)))
+            return false;
+
+        auto tt = Gco->gch.tt;
+        if (tt == LUA_TFUNCTION || tt == LUA_TUSERDATA || (Gct->IncludeTables && tt == LUA_TTABLE))
+        {
+            Gct->L->top->value.gc = Gco;
+            Gct->L->top->tt = Gco->gch.tt;
+            Gct->L->top++;
+
+            lua_rawseti(Gct->L, -2, ++Gct->Count);
+        }
+        return false;
+    });
+
+    return 1;
+}
 
 void script_library::initialize(lua_State* L)
 {
